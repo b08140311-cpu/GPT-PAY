@@ -75,6 +75,12 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
 .wc-picker-panel{width:100%;padding:22px 22px 42px;border-radius:28px 28px 0 0;box-sizing:border-box;background:linear-gradient(165deg,#262c41,#0c101b 72%);box-shadow:0 -1px 0 rgba(255,255,255,.25),0 -25px 70px rgba(0,0,0,.4);color:#f3f6ff}
 .wc-app-choice{display:flex;align-items:center;gap:14px;width:100%;border:1px solid rgba(255,255,255,.16);border-radius:18px;background:rgba(255,255,255,.075);padding:15px 16px;color:white;margin:10px 0;font-size:16px;text-align:left}
 .wc-app-choice:active{background:rgba(255,255,255,.18)}
+/* GPU-only page movement: single compositor transform; no scrollTop/layout-based animation */
+#wc-scroller{will-change:transform;contain:layout paint;transform:translate3d(0,0,0);backface-visibility:hidden}
+.wc-blob{animation-play-state:paused!important}
+.wc-liquid{filter:blur(25px);opacity:.38}
+.wc-float{animation:none!important}
+
 @media (prefers-reduced-motion:reduce){.wc-pin,.wc-pout,.wc-nudge,.wc-page,.wc-rise,.wc-turn,.wc-float,.wc-blob,.wc-bob,.wc-toast{animation:none}}
 </style></head><body><div id="viewport"><div id="wc-root" data-page="0" class="wc-root {{rootCls}}" style="position:relative;width:390px;height:844px;overflow:hidden;background:linear-gradient(180deg,#02050F,#000 70%);font-family:'DM Sans',system-ui,sans-serif;color:#F2F4FF">
 
@@ -202,7 +208,7 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
   <div class="wc-picker" style="display:{{pickerDisplay}}" role="dialog" aria-modal="true" aria-label="選擇付款 App">
     <div class="wc-picker-panel">
       <div style="width:36px;height:4px;border-radius:3px;background:#66718e;margin:0 auto 18px"></div>
-      <div style="font:700 21px 'Sora',sans-serif;margin-bottom:7px">選擇要開啟的 App</div>
+      <div style="font:700 21px 'Sora',sans-serif;margin-bottom:7px">HTML 預覽模式</div>
       <div style="font-size:13px;color:#aebbd5;margin-bottom:18px">{{pickerSubtitle}}</div>
       <button type="button" class="wc-app-choice" onClick="{{chooseLine}}"><span style="color:#06C755;font-size:24px">●</span><span>LINE Pay</span><span style="margin-left:auto;opacity:.5">›</span></button>
       <button type="button" class="wc-app-choice" onClick="{{choosePx}}"><span style="color:#FFD21F;font-size:24px">●</span><span>全支付</span><span style="margin-left:auto;opacity:.5">›</span></button>
@@ -214,7 +220,7 @@ button{font-family:'DM Sans',system-ui,sans-serif;cursor:pointer}
   <div class="wc-picker" style="display:{{settingsDisplay}}" role="dialog" aria-modal="true" aria-label="管理卡片對應 App">
     <div class="wc-picker-panel" style="padding-bottom:35px">
       <div style="font:700 21px 'Sora',sans-serif;margin-bottom:8px">卡片開啟 App 設定</div>
-      <p style="font-size:13px;color:#aebbd5;margin:0 0 14px">選擇要修改的卡片，再選指定的 App。儲存後刷卡不再詢問。</p>
+      <p style="font-size:13px;color:#aebbd5;margin:0 0 14px">點選卡片後，Android 會顯示手機全部可啟動的 App。第一次選擇後自動記住。</p>
       <button class="wc-app-choice" type="button" onClick="{{editCard0}}"><span style="color:#06C755">●</span><span>LINE Pay 卡</span><span style="margin-left:auto;color:#b6c5e5">{{mapped0}} ›</span></button>
       <button class="wc-app-choice" type="button" onClick="{{editCard1}}"><span style="color:#FFD21F">●</span><span>全支付卡</span><span style="margin-left:auto;color:#b6c5e5">{{mapped1}} ›</span></button>
       <button class="wc-app-choice" type="button" onClick="{{editCard2}}"><span style="color:#5AA2FF">●</span><span>PayPal 卡</span><span style="margin-left:auto;color:#b6c5e5">{{mapped2}} ›</span></button>
@@ -247,9 +253,18 @@ class Component extends DCLogic {
   constructor(props) {
     super(props);
     this.state = { sel: 0, toast: '', payOpen: false, payOut: false, payTx: 0, payTy: 0, dragX: 0, dragging: false, done: false, swipeX: 0, swiping: false, choiceOpen: false, settingsOpen: false, editingCard: 0, editorMode: false };
-    this.mapKey = 'payhub-card-target-v1';
-    try { const raw=JSON.parse(localStorage.getItem(this.mapKey)); this.cardApps=Array.isArray(raw)?[0,1,2].map(i=>[0,1,2].includes(raw[i])?raw[i]:null):[null,null,null]; }
+    this.mapKey = 'payhub-card-target-v2';
+    try { const saved=JSON.parse(localStorage.getItem(this.mapKey)); this.cardApps=Array.isArray(saved)?saved.map(x=>typeof x==='string'?x:null).slice(0,3):[null,null,null]; }
     catch(e){this.cardApps=[null,null,null];}
+    while(this.cardApps.length<3)this.cardApps.push(null);
+    window.payHubTargetSaved=(card,pkg,label)=>{
+      if(card<0||card>2)return;
+      this.cardApps[card]=pkg;
+      try{localStorage.setItem(this.mapKey,JSON.stringify(this.cardApps));}catch(e){}
+      this.setState({choiceOpen:false,settingsOpen:!!this.state.editorMode});
+      this.showToast('已記住：'+label);
+    };
+    window.payHubTargetCleared=(card)=>{this.cardApps[card]=null;this.setState({});};
     this.outTimer = null;
     this.sw = null;
     this.swiped = false;
@@ -267,37 +282,58 @@ class Component extends DCLogic {
     const sc = document.getElementById('wc-scroller');
     if (!sc) return;
     this.sc = sc;
-    const H = () => sc.clientHeight || 844;
-    const clamp = i => Math.max(0,Math.min(1,i));
-    this.pageIndex = 0;
-    this.touchStart = null;
-    this.wheelCooldown = 0;
-    this.onTS = e => {
-      if (this.state.payOpen || this.state.choiceOpen || this.state.settingsOpen) return;
-      const t = e.touches[0];
-      this.touchStart={x:t.clientX,y:t.clientY};
-    };
-    this.onTM = e => {
-      if (!this.touchStart || this.state.payOpen || this.state.choiceOpen || this.state.settingsOpen) return;
+    this.pageIndex=0;
+    this.pageY=0;
+    this.touchStart=null;
+    this.wheelAccumulator=0;
+    this.lastWheelTime=0;
+    this.wheelCooldown=0;
+    this.onTS=e=>{
+      if(this.state.payOpen||this.state.choiceOpen||this.state.settingsOpen)return;
       const t=e.touches[0];
-      if (Math.abs(t.clientY-this.touchStart.y)>8 && Math.abs(t.clientY-this.touchStart.y)>Math.abs(t.clientX-this.touchStart.x)) e.preventDefault();
+      this.touchStart={x:t.clientX,y:t.clientY,lastY:t.clientY,lastAt:performance.now(),velocity:0,axis:null};
+      this.cancelAnim();
+      sc.style.transition='none';
     };
-    this.onTE = e => {
-      if (!this.touchStart || this.state.payOpen || this.state.choiceOpen || this.state.settingsOpen) { this.touchStart=null; return; }
-      const y=e.changedTouches?.[0]?.clientY ?? this.touchStart.y;
-      const x=e.changedTouches?.[0]?.clientX ?? this.touchStart.x;
-      const dy=this.touchStart.y-y;
-      const dx=this.touchStart.x-x;
-      this.touchStart=null;
-      if (Math.abs(dy)>65 && Math.abs(dy)>Math.abs(dx)*1.15) this.goPage(clamp(this.pageIndex+(dy>0?1:-1)));
+    this.onTM=e=>{
+      const t0=this.touchStart;
+      if(!t0||this.state.payOpen||this.state.choiceOpen||this.state.settingsOpen)return;
+      const t=e.touches[0],dx=t.clientX-t0.x,dy=t.clientY-t0.y;
+      if(!t0.axis&&Math.max(Math.abs(dx),Math.abs(dy))>9)t0.axis=Math.abs(dy)>Math.abs(dx)*1.2?'y':'x';
+      if(t0.axis!=='y')return;
+      if(e.cancelable)e.preventDefault();
+      const now=performance.now(),dt=Math.max(8,now-t0.lastAt);
+      t0.velocity=.72*t0.velocity+.28*((t.clientY-t0.lastY)/dt);
+      t0.lastY=t.clientY;t0.lastAt=now;
+      const range=sc.clientHeight||844,origin=-this.pageIndex*range;
+      const raw=origin+dy;
+      const limited=Math.max(-range-70,Math.min(70,raw));
+      const over=limited>0?70*(1-Math.exp(-limited/95)):limited< -range? -range-70*(1-Math.exp(-(-range-limited)/95)):limited;
+      this.setPageOffset(over);
     };
-    this.onWheel = e => {
-      e.preventDefault();
-      if (this.state.payOpen || this.state.choiceOpen || this.state.settingsOpen || Math.abs(e.deltaY)<9) return;
+    this.onTE=e=>{
+      const t0=this.touchStart;this.touchStart=null;
+      if(!t0)return;
+      if(t0.axis!=='y'){this.goPage(this.pageIndex);return;}
+      const y=e.changedTouches?.[0]?.clientY??t0.lastY;
+      const distance=y-t0.y;
+      const projected=distance+t0.velocity*160;
+      const direction=projected<0?1:-1;
+      this.goPage(Math.abs(projected)>68?Math.max(0,Math.min(1,this.pageIndex+direction)):this.pageIndex);
+    };
+    this.onWheel=e=>{
+      if(e.cancelable)e.preventDefault();
+      if(this.state.payOpen||this.state.choiceOpen||this.state.settingsOpen)return;
       const now=performance.now();
-      if(now<this.wheelCooldown) return;
-      this.wheelCooldown=now+680;
-      this.goPage(clamp(this.pageIndex+(e.deltaY>0?1:-1)));
+      if(now-this.lastWheelTime>160)this.wheelAccumulator=0;
+      this.lastWheelTime=now;
+      if(now<this.wheelCooldown)return;
+      const scaled=e.deltaY*(e.deltaMode===1?17:e.deltaMode===2?500:1);
+      this.wheelAccumulator+=scaled;
+      if(Math.abs(this.wheelAccumulator)<40)return;
+      const dir=Math.sign(this.wheelAccumulator);this.wheelAccumulator=0;
+      this.wheelCooldown=now+880;
+      this.goPage(this.pageIndex+dir);
     };
     sc.addEventListener('touchstart',this.onTS,{passive:true});
     sc.addEventListener('touchmove',this.onTM,{passive:false});
@@ -319,32 +355,17 @@ class Component extends DCLogic {
       sc.removeEventListener('wheel',this.onWheel);
     }
   }
-  cancelAnim() {
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = null;
-    this.animating = false;
+  cancelAnim() { this.animating=false; }
+  setPageOffset(y){
+    this.pageY=y;
+    if(this.sc)this.sc.style.transform='translate3d(0,'+y+'px,0)';
   }
   goPage(index,instant=false){
-    const sc=this.sc;
-    if(!sc)return;
+    if(!this.sc)return;
     this.pageIndex=Math.max(0,Math.min(1,index));
     document.getElementById('wc-root').setAttribute('data-page',String(this.pageIndex));
-    this.animateTo(this.pageIndex*(sc.clientHeight||844),instant?0:380);
-  }
-  animateTo(top,dur){
-    const sc=this.sc;if(!sc)return;
-    this.cancelAnim();
-    if(!dur){sc.scrollTop=top;return;}
-    const from=sc.scrollTop,dist=top-from,t0=performance.now();
-    this.animating=true;
-    const tick=now=>{
-      const p=Math.min(1,(now-t0)/dur);
-      const eased=1-Math.pow(1-p,3);
-      sc.scrollTop=from+dist*eased;
-      if(p<1)this.raf=requestAnimationFrame(tick);
-      else{sc.scrollTop=top;this.animating=false;this.raf=null;}
-    };
-    this.raf=requestAnimationFrame(tick);
+    this.sc.style.transition=instant?'none':'transform 1050ms cubic-bezier(.16,1,.3,1)';
+    this.setPageOffset(-this.pageIndex*(this.sc.clientHeight||844));
   }
   openPay(i) {
     let tx = 0, ty = 0;
@@ -367,24 +388,27 @@ class Component extends DCLogic {
     this.outTimer = setTimeout(() => this.setState({ payOut: false }), 960);
   }
   openChooser(card=this.state.sel,editorMode=false){
-    this.setState({choiceOpen:true, settingsOpen:false, editingCard:card, editorMode});
-  }
-  editCard(index){ this.openChooser(index,true); }
-  launchApp(index){
-    const items=['com.linepaytw.upay','com.pxpayplus.app','com.paypal.android.p2pmobile'];
-    if(window.PayHubAndroid && typeof window.PayHubAndroid.openApp==='function'){
-      try{window.PayHubAndroid.openApp(items[index]);return;}catch(e){this.showToast('無法啟動 App');return;}
+    this.setState({choiceOpen:false,settingsOpen:false,editingCard:card,editorMode});
+    if(window.PayHubAndroid && typeof window.PayHubAndroid.pickApp==='function'){
+      try{ window.PayHubAndroid.pickApp(card,editorMode);return; }
+      catch(e){this.showToast('無法開啟系統 App 清單');}
     }
-    this.showToast('已設定 '+this.P[index].name+'；在 Android APK 中刷卡會啟動 App');
+    this.setState({choiceOpen:true,settingsOpen:false,editingCard:card,editorMode});
+  }
+  editCard(index){this.openChooser(index,true);}
+  launchApp(pkg){
+    if(window.PayHubAndroid && typeof window.PayHubAndroid.openCard==='function'){
+      try{window.PayHubAndroid.openCard(this.state.sel);return;}catch(e){this.showToast('啟動 App 失敗');return;}
+    }
+    this.showToast('HTML 預覽無法啟動 Android App，請使用 APK');
   }
   chooseApp(index){
     const card=this.state.editingCard;
-    const editor=!!this.state.editorMode;
-    this.cardApps[card]=index;
+    const pkg=['com.linepaytw.upay','com.pxpayplus.app','com.paypal.android.p2pmobile'][index];
+    this.cardApps[card]=pkg;
     try{localStorage.setItem(this.mapKey,JSON.stringify(this.cardApps));}catch(e){}
-    this.setState({choiceOpen:false,settingsOpen:editor});
-    if(!editor)this.launchApp(index);
-    else this.showToast(this.P[card].name+' 已設為 '+this.P[index].name);
+    this.setState({choiceOpen:false,settingsOpen:!!this.state.editorMode});
+    this.showToast('HTML 預覽已記住 '+this.P[index].name);
   }
   finishPay(){
     this.drag=null;
@@ -393,7 +417,9 @@ class Component extends DCLogic {
     setTimeout(()=>{
       this.closePay();
       const target=this.cardApps[card];
-      if(target===null || target===undefined)this.openChooser(card,false);
+      if(window.PayHubAndroid && typeof window.PayHubAndroid.onCardSwipe==='function'){
+        window.PayHubAndroid.onCardSwipe(card);
+      }else if(target===null || target===undefined)this.openChooser(card,false);
       else this.launchApp(target);
     },480);
   }
@@ -540,13 +566,13 @@ class Component extends DCLogic {
       hintStyle: 'opacity:' + (paying ? 1 : 0) + ';visibility:' + (paying ? 'visible' : 'hidden') + ';transition:opacity .6s ease ' + (paying ? '1.1s' : '0s') + ',visibility 0s linear ' + (paying ? '0s' : '.6s') + ';',
       cancelPay: () => self.closePay(),
       selColor: P[sel].lite,
-      ctaLabel: self.cardApps[sel]===null ? 'Choose payment app' : 'Open '+P[self.cardApps[sel]].name,
+      ctaLabel: self.cardApps[sel]===null ? 'Choose an app' : 'Open linked app',
       pickerDisplay: st.choiceOpen ? 'flex':'none',
-      pickerSubtitle: st.editorMode ? '修改這張卡的預設開啟 App' : '首次刷卡 · 選擇後會自動記住',
+      pickerSubtitle: st.editorMode ? '修改這張卡的預設開啟 App' : 'Android APK 將開啟手機原生 App 選擇器',
       settingsDisplay: st.settingsOpen ? 'flex':'none',
-      mapped0: self.cardApps[0]===null ? '未設定' : P[self.cardApps[0]].name,
-      mapped1: self.cardApps[1]===null ? '未設定' : P[self.cardApps[1]].name,
-      mapped2: self.cardApps[2]===null ? '未設定' : P[self.cardApps[2]].name,
+      mapped0: self.cardApps[0]===null ? '未設定' : '已設定',
+      mapped1: self.cardApps[1]===null ? '未設定' : '已設定',
+      mapped2: self.cardApps[2]===null ? '未設定' : '已設定',
       openSettings: () => self.setState({settingsOpen:true}),
       closeSettings: () => self.setState({settingsOpen:false}),
       editCard0: () => self.editCard(0),
@@ -558,7 +584,7 @@ class Component extends DCLogic {
       dismissPicker: () => self.setState({choiceOpen:false,settingsOpen:!!self.state.editorMode}),
       hasToast: !!st.toast,
       toast: st.toast,
-      openSel: () => { const card=self.state.sel; const target=self.cardApps[card]; if(target===null)self.openChooser(card,false);else self.launchApp(target); },
+      openSel: () => { const card=self.state.sel; if(window.PayHubAndroid?.onCardSwipe)window.PayHubAndroid.onCardSwipe(card);else if(self.cardApps[card]===null)self.openChooser(card,false);else self.launchApp(self.cardApps[card]); },
       back: () => {
         try {
           if (self.state.choiceOpen) {self.setState({choiceOpen:false, settingsOpen:!!self.state.editorMode});return;}
@@ -566,7 +592,7 @@ class Component extends DCLogic {
           if (self.state.payOpen) { self.closePay(); return; }
           const sc = self.sc || document.getElementById('wc-scroller');
           const h = sc.clientHeight || 844;
-          const idx = Math.round(sc.scrollTop / h);
+          const idx = self.pageIndex;
           self.sc = sc;
           self.goPage(Math.max(0, idx - 1));
         } catch (e) {}
