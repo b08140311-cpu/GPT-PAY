@@ -1,0 +1,19 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1,maximum-scale=1"><style>
+*{box-sizing:border-box}html,body{margin:0;background:#080e1c;color:#eaf1ff;font:15px system-ui,-apple-system,sans-serif}main{max-width:600px;margin:auto;padding:26px 20px 40px}.eyebrow{color:#98b0d9;font-size:12px;letter-spacing:3px}h1{font-size:32px;letter-spacing:-1px;margin:8px 0}p{color:#9fb0cc;line-height:1.65}.panel{background:#111b30;border:1px solid #273753;border-radius:23px;padding:20px;margin-top:20px}.upload{border:1px dashed #6486ba;min-height:135px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#b7c9ea}button{border:0;border-radius:14px;padding:14px 16px;color:#fff;background:#2d65db;font-size:15px;font-weight:650;cursor:pointer}button:disabled{opacity:.5}.wide{width:100%;margin-top:16px}button.secondary{background:#24344f}.row{display:flex;gap:10px;margin-top:12px}.row button{flex:1}input,select{width:100%;background:#0b1427;color:#fff;border:1px solid #3d4f70;padding:14px;border-radius:12px;font-size:15px}label{display:block;color:#bbc9e1;font-size:13px;margin:16px 0 8px}pre{font:14px/1.8 system-ui;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:#e2ebff}#result{display:none}.hint{font-size:12px;color:#98abc8}#status{margin-top:12px;color:#9fc1f9;min-height:22px}.accent{color:#8db5ff}#name{font-size:13px;color:#b9cae6}</style></head>
+<body><main><div class="eyebrow">STUDY / ASSISTANT</div><h1>GPT <span class="accent">Study Notes</span></h1><p>PDF、講義、課堂截圖，一次整理成你看得懂的繁體中文筆記。</p>
+<section class="panel"><div class="upload"><div style="font-size:34px">▤</div><strong>上傳 PDF 或圖片</strong><div id="name">尚未選擇檔案</div><button class="secondary" onclick="pick()">選擇手機檔案</button></div>
+<label>筆記模式</label><select id="mode"><option value="brief">快速重點（短而精準）</option><option value="full">完整章節整理</option><option value="exam">考前複習與自測</option></select>
+<label>OpenAI API Key（僅保留於本次開啟期間）</label><input id="key" type="password" autocomplete="off" placeholder="sk-…"><div class="hint" style="margin-top:8px">此 App 直接呼叫 OpenAI API，會依 API 使用量計費。請勿分享金鑰。不要上傳沒有權限處理的機密文件。</div>
+<button class="wide" id="go" onclick="analyze()">生成整理筆記</button><div id="status"></div></section>
+<section class="panel" id="result"><h2>整理完成</h2><div class="row"><button class="secondary" onclick="copyOut()">複製筆記</button><button class="secondary" onclick="shareOut()">分享文字</button></div><hr style="border:0;border-top:1px solid #293c58;margin:18px 0"><pre id="output"></pre></section>
+</main><script>
+let note='';
+function pick(){if(window.StudyAndroid)StudyAndroid.pickFile();}
+function selected(n){document.getElementById('name').textContent=n;}
+function statusText(s){document.getElementById('status').textContent=s;}
+function analyze(){const key=document.getElementById('key').value.trim();if(!key){statusText('請先輸入 OpenAI API Key');return;}document.getElementById('go').disabled=true;statusText('正在分析，請勿關閉頁面…');StudyAndroid.analyze(key,document.getElementById('mode').value);}
+function finished(t){document.getElementById('go').disabled=false;document.getElementById('result').style.display='block';note=t;document.getElementById('output').textContent=t;statusText('完成');document.getElementById('result').scrollIntoView({behavior:'smooth'});}
+function failed(t){document.getElementById('go').disabled=false;statusText('處理失敗：'+t);}
+function copyOut(){StudyAndroid.copy(note);statusText('已複製');}
+function shareOut(){StudyAndroid.share(note);}
+</script></body></html>

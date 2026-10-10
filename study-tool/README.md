@@ -1,0 +1,1 @@
+# GPT Study Notes\n\nAn Android PDF/image-to-study-notes tool using OpenAI Responses API. Requires a separate pay-as-you-go OpenAI API key, entered into the app for the current session only. Select PDF/JPG/PNG/WEBP up to 15 MB. The file is sent to OpenAI for processing; do not submit confidential content without permission. The APK is an unsigned-for-release debug build.\n
