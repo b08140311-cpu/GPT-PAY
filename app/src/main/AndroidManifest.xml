@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <queries>
+  <package android:name="com.linepaytw.upay"/>
+  <package android:name="com.pxpayplus.app"/>
+  <package android:name="com.paypal.android.p2pmobile"/>
+ </queries>
+ <application android:label="Pay Hub" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="false">
+  <activity android:name=".MainActivity" android:exported="true">
+   <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+  </activity>
+ </application>
+</manifest>

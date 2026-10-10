@@ -1,5 +1,5 @@
 # Pay Hub
 
-Android WebView launcher for LINE Pay, 全支付, and PayPal. Swipe a card to launch the installed app. This does not process payments. LINE Pay scanning screen deep-link is not verified.
+Android app with interactive card UI. Right swipe launches LINE Pay, 全支付, or PayPal if installed, or opens Google Play. LINE Pay direct scan screen is not verified and is not supported as a guaranteed destination.
 
-Build via GitHub Actions → Build Pay Hub APK → artifact `Pay-Hub-Android-APK`.
+Build: Actions > Build Pay Hub APK > artifact Pay-Hub-Android-APK. This app does not handle payments.
