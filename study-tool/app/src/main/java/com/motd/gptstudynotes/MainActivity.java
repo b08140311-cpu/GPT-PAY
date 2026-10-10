@@ -68,7 +68,7 @@ public class MainActivity extends Activity {
  String raw;try(InputStream stream=response;ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=stream.read(b))!=-1)out.write(b,0,n);raw=out.toString("UTF-8");}
  JSONObject data=new JSONObject(raw);if(code<200||code>=300){JSONObject e=data.optJSONObject("error");throw new Exception((e!=null?e.optString("message"):raw));}
  StringBuilder text=new StringBuilder();JSONArray output=data.optJSONArray("output");if(output!=null)for(int i=0;i<output.length();i++){JSONObject item=output.optJSONObject(i);if(item==null||!"message".equals(item.optString("type")))continue;JSONArray parts=item.optJSONArray("content");if(parts!=null)for(int j=0;j<parts.length();j++){JSONObject part=parts.optJSONObject(j);if(part!=null&&"output_text".equals(part.optString("type")))text.append(part.optString("text")).append("\n");}}
- if(text.length()==0)throw new Exception("沒有取得文字結果，請重試");String answer=text.toString();String replyId=data.optString("id","");runOnUiThread(()->{web.evaluateJavascript("window.chatFinished("+JSONObject.quote(answer)+","+JSONObject.quote(replyId)+")",null);});
+ if(text.length()==0)throw new Exception("沒有取得文字結果，請重試");String answer=text.toString();String replyId=data.optString("id","");if(selectedFile!=null&&selectedFile.equals(file)){file=null;filename=null;mime=null;}runOnUiThread(()->{web.evaluateJavascript("window.chatFinished("+JSONObject.quote(answer)+","+JSONObject.quote(replyId)+")",null);});
  }catch(Exception e){js("failed",e.getMessage()==null?"未知錯誤":e.getMessage());}finally{if(conn!=null)conn.disconnect();}
  }).start();
  }
